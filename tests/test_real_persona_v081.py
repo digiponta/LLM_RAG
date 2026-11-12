@@ -33,7 +33,7 @@ class RealPersonaPreparationV081Tests(unittest.TestCase):
         d = self.sample()
         d["utterances"][1]["interlocutor_id"] = "AA"
         pairs = dialogue_pairs(d, "a.json")
-        self.assertEqual(len(pairs), 2)
+        self.assertEqual(len(pairs), 1)
 
     def test_long_turn_filtered(self):
         d = self.sample()

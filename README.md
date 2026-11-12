@@ -54,3 +54,12 @@ pretend that the original 64-token model can process full retrieved chunks.
 No audit workflow is present, but basic input parsing and transparent source
 display remain. Retrieved documents are untrusted text; this small model
 cannot reliably enforce the prompt's instruction boundaries.
+
+## Nagato corpus
+
+`data/knowledge/data-nagato.txt` is the original uploaded 2016
+`@NagatFakeBot` corpus, retained verbatim (UTF-8, 430 lines). The default
+`--docs data/knowledge` directory automatically includes it in retrieval.
+The corpus contains authored opinions, fiction and hypotheses; retrieval
+results are source text, not verified facts. Adding this file does **not**
+train or update LLM_GPU weights. Run `/reload` after changing documents.

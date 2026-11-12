@@ -37,7 +37,7 @@ class V06Tests(unittest.TestCase):
             self.assertEqual(chat.state.focus_topic, "時間")
             self.assertEqual(chat.last_plan.strategy, "EXCERPT")
             self.assertEqual(chat.last_plan.source, "knowledge.txt")
-            self.assertIn(chat.last_plan.excerpt, [p.text for p in chat.rag.passages][1] if False else response)
+            self.assertIn(chat.last_plan.excerpt, response)
 
     def test_followup_preserves_topic(self):
         with tempfile.TemporaryDirectory() as d:

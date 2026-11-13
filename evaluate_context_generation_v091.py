@@ -110,11 +110,11 @@ def run(args) -> dict:
 
     import torch
     sys.path.insert(0, str(args.gpu_dir.resolve()))
-    from model import LanguageModel
     from tokenizer import Tokenizer
+    from rope_model_v093 import load_configured_model
     device = torch.device("cuda" if args.device == "auto" and torch.cuda.is_available()
                           else "cpu" if args.device == "auto" else args.device)
-    model, _ = LanguageModel.load_checkpoint(str(args.checkpoint), device=device)
+    model, _ = load_configured_model(args.checkpoint, device, rope=args.rope)
     tokenizer = Tokenizer.load(str(args.tokenizer))
     if tokenizer.vocab_size != model.vocab_size:
         raise ValueError("Tokenizer mismatch")
@@ -183,6 +183,7 @@ def main():
     p.add_argument("--max-new-tokens", type=int, default=48)
     p.add_argument("--output", type=Path, default=Path("results/context_generation_v091.json"))
     p.add_argument("--include-text", action="store_true")
+    p.add_argument("--rope", action="store_true", help="Load RoPE checkpoint explicitly")
     p.add_argument("--overwrite", action="store_true")
     run(p.parse_args())
 

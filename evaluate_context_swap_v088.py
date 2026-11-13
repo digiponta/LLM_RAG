@@ -94,13 +94,13 @@ def evaluate(args):
         raise ValueError("Text-bearing reports must use *_text_v088.json")
     import torch
     sys.path.insert(0, str(args.gpu_dir.resolve()))
-    from model import LanguageModel
     from tokenizer import Tokenizer
+    from rope_model_v093 import load_configured_model
 
     device = torch.device("cuda" if args.device == "auto" and torch.cuda.is_available()
                           else "cpu" if args.device == "auto" else args.device)
     tokenizer = Tokenizer.load(str(args.tokenizer))
-    model, _ = LanguageModel.load_checkpoint(str(args.checkpoint), device=device)
+    model, _ = load_configured_model(args.checkpoint, device, rope=args.rope)
     if tokenizer.vocab_size != model.vocab_size:
         raise ValueError("Checkpoint/tokenizer mismatch")
     model.eval()
@@ -182,6 +182,7 @@ def main():
     p.add_argument("--device", choices=("auto", "cpu", "cuda"), default="auto")
     p.add_argument("--output", type=Path, default=Path("results/context_swap_v088.json"))
     p.add_argument("--include-text", action="store_true")
+    p.add_argument("--rope", action="store_true", help="Load RoPE checkpoint explicitly")
     p.add_argument("--overwrite", action="store_true")
     evaluate(p.parse_args())
 

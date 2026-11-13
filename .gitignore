@@ -1,0 +1,23 @@
+# Python build artifacts
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Locally generated and potentially private SFT data
+data/dialogue/
+data-src/
+
+# Locally generated model checkpoints and evaluation reports
+model/*.pt
+model/*.pth
+results/
+
+# Local environments and secrets
+.venv/
+venv/
+.env
+.env.*
+
+# Local report exports
+*generation_text*.json
+*generation_review*.json

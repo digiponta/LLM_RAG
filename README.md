@@ -63,3 +63,7 @@ cannot reliably enforce the prompt's instruction boundaries.
 The corpus contains authored opinions, fiction and hypotheses; retrieval
 results are source text, not verified facts. Adding this file does **not**
 train or update LLM_GPU weights. Run `/reload` after changing documents.
+
+## Unified model training (v0.9.9)
+
+Real Persona Chat and `data/knowledge/data-nagato.txt` now share the **same SFT data schema, tokenizer, single-head RoPE Medium model, answer-only loss and training command**. The old RAG route remains optional and separate from training. Prepare the local mixture with `python prepare_unified_sft_v099.py`; see [UNIFIED_NAGATO_PERSONA_SFT_V099.md](UNIFIED_NAGATO_PERSONA_SFT_V099.md) for the PowerShell commands for mixed SFT training and separate evaluation on Persona and Nagato held-out sets. Source attribution and original-line split grouping preserve the distinction between authored hypotheses/opinions and verified science. Generated local dialogues and model files must not be committed.

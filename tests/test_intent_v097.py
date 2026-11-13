@@ -101,8 +101,8 @@ class IntentV097Tests(unittest.TestCase):
 
     def test_collate_position_correct(self):
         items = [
-            (((1, 2, 3, 4), (-100, -100, 3, 4)), 1),
-            (((1, 2, 3), (-100, 2, 3)), UNKNOWN_INTENT),
+            (([1, 2, 3, 4], [-100, -100, 3, 4]), 1),
+            (([1, 2, 3], [-100, 2, 3]), UNKNOWN_INTENT),
         ]
         ids, labels, position, intents = collate_intent(items, 0)
         self.assertEqual(position.tolist(), [2, 1])

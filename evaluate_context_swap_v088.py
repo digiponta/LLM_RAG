@@ -100,7 +100,7 @@ def evaluate(args):
     device = torch.device("cuda" if args.device == "auto" and torch.cuda.is_available()
                           else "cpu" if args.device == "auto" else args.device)
     tokenizer = Tokenizer.load(str(args.tokenizer))
-    model, _ = load_configured_model(args.checkpoint, device, rope=args.rope)
+    model, _ = load_configured_model(args.checkpoint, device, rope=getattr(args, 'rope', False))
     if tokenizer.vocab_size != model.vocab_size:
         raise ValueError("Checkpoint/tokenizer mismatch")
     model.eval()

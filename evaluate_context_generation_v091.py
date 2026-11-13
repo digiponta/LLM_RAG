@@ -114,7 +114,7 @@ def run(args) -> dict:
     from rope_model_v093 import load_configured_model
     device = torch.device("cuda" if args.device == "auto" and torch.cuda.is_available()
                           else "cpu" if args.device == "auto" else args.device)
-    model, _ = load_configured_model(args.checkpoint, device, rope=args.rope)
+    model, _ = load_configured_model(args.checkpoint, device, rope=getattr(args, 'rope', False))
     tokenizer = Tokenizer.load(str(args.tokenizer))
     if tokenizer.vocab_size != model.vocab_size:
         raise ValueError("Tokenizer mismatch")

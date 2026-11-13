@@ -13,10 +13,12 @@ import sys
 from pathlib import Path
 
 from prepare_real_persona_v081 import compact_prompt
+from rag_persona import LocalRAG
 
 
 def make_prompt(question: str, history: list[str], tokenizer,
-                context_length: int, max_new_tokens: int = 48) -> tuple[str, list[str]]:
+                context_length: int, max_new_tokens: int = 48,
+                evidence: str = "") -> tuple[str, list[str]]:
     """Drop oldest WHOLE turns until prompt fits; never truncate the question.
 
     Leave a generation budget when possible. Our model can slide its context
@@ -28,14 +30,19 @@ def make_prompt(question: str, history: list[str], tokenizer,
     if max_new_tokens < 1:
         raise ValueError("max_new_tokens must be >=1")
     kept = list(history[-2:])
+    evidence_text = evidence.strip()
     while True:
-        ctx = "／".join(kept)
+        ctx = "／".join([*kept, *((["資料:" + evidence_text]) if evidence_text else [])])
         prompt = compact_prompt({"question": question.strip(), "context": ctx})
         ids = tokenizer.encode(prompt, add_bos=True)
         if len(ids) < context_length and len(ids) + min(max_new_tokens, 16) <= context_length:
             return prompt, kept
         if kept:
             kept.pop(0)
+            continue
+        if evidence_text:
+            # Keep question intact; shorten retrieved context if necessary.
+            evidence_text = evidence_text[:max(0, len(evidence_text) // 2)]
             continue
         if len(ids) >= context_length:
             raise ValueError(
@@ -95,7 +102,8 @@ def load_chat(args):
 
 
 def run(args) -> None:
-    if args.max_new_tokens < 1 or args.temperature < 0 or args.top_k < 1:
+    if (args.max_new_tokens < 1 or args.temperature < 0 or args.top_k < 1
+            or args.top_k_docs < 1 or args.evidence_chars < 1):
         raise ValueError("Invalid generation options")
     if args.repetition_penalty <= 0:
         raise ValueError("repetition-penalty must be positive")
@@ -110,9 +118,15 @@ def run(args) -> None:
     print(f"Attention : {'RoPE' if rope else 'Legacy'}")
     print(f"Device    : {device}")
     print(f"Context   : {model.context_length}, Parameters: {model.parameter_count:,}")
-    print("Commands  : /reset  /status  /exit")
+    print("Commands  : /reset  /status  /reload  /sources  /exit")
     print("Note: local generative SFT demo, not an evidence-grounded retrieval answer.")
     history: list[str] = []
+    rag = LocalRAG(args.docs) if args.rag else None
+    sources: list[str] = []
+    if rag:
+        print(f"RAG       : on, docs={args.docs}, passages={len(rag.passages)}")
+    else:
+        print("RAG       : off (use --rag to enable local retrieval)")
     while True:
         try:
             question = input("You> ").strip()
@@ -125,17 +139,33 @@ def run(args) -> None:
             break
         if question == "/reset":
             history.clear()
+            sources.clear()
             print("History cleared.")
             continue
         if question == "/status":
-            print(f"History turns={len(history)}, max=2; model_context={model.context_length}")
+            print(f"History turns={len(history)}, max=2; model_context={model.context_length}, RAG={bool(rag)}")
+            continue
+        if question == "/reload":
+            if not rag:
+                print("RAG disabled. Restart with --rag.")
+            else:
+                rag.refresh()
+                print(f"RAG: {len(rag.passages)} passages reloaded.")
+            continue
+        if question == "/sources":
+            print("Sources: " + (", ".join(sources) if sources else "none"))
             continue
         if question.startswith("/"):
-            print("Unknown command. Available: /reset /status /exit")
+            print("Unknown command. Available: /reset /status /reload /sources /exit")
             continue
         try:
+            hits = rag.search(question, k=args.top_k_docs) if rag else []
+            sources = [hit.source for hit in hits]
+            # Short evidence, not trusted as a system instruction or fact.
+            snippets = [hit.text[:args.evidence_chars] for hit in hits]
             prompt, _ = make_prompt(question, history, tok,
-                                    model.context_length, args.max_new_tokens)
+                                    model.context_length, args.max_new_tokens,
+                                    evidence="／".join(snippets))
             answer, eos = decode_answer(
                 model, tok, prompt, max_new_tokens=args.max_new_tokens,
                 temperature=args.temperature, top_k=args.top_k,
@@ -145,6 +175,8 @@ def run(args) -> None:
             continue
         display = answer.strip() or "(生成できませんでした)"
         print(f"AI> {display}")
+        if sources:
+            print("RAG sources (unverified): " + ", ".join(sources))
         # Keep the real model output, not the display placeholder.
         history.extend((question, answer))
         history = history[-2:]
@@ -165,6 +197,11 @@ def main():
     p.add_argument("--top-k", type=int, default=40)
     p.add_argument("--repetition-penalty", type=float, default=1.3)
     p.add_argument("--seed", type=int, default=42)
+    p.add_argument("--rag", action="store_true",
+                   help="Optional local document retrieval; model was not trained for grounded citations")
+    p.add_argument("--docs", type=Path, default=Path("data/knowledge"))
+    p.add_argument("--top-k-docs", type=int, default=1)
+    p.add_argument("--evidence-chars", type=int, default=32)
     p.add_argument("--verbose", action="store_true")
     run(p.parse_args())
 

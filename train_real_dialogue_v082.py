@@ -121,14 +121,16 @@ def train(args):
             raise FileExistsError(f"Existing output: {file}; use --overwrite")
 
     sys.path.insert(0, str(args.gpu_dir.resolve()))
-    from model import LanguageModel
     from tokenizer import Tokenizer
+    from rope_model_v093 import load_configured_model
     device = torch.device("cuda" if args.device == "auto" and torch.cuda.is_available()
                           else "cpu" if args.device == "auto" else args.device)
     random.seed(args.seed)
     torch.manual_seed(args.seed)
     tokenizer = Tokenizer.load(str(args.tokenizer))
-    model, original_ckpt = LanguageModel.load_checkpoint(str(args.checkpoint), device=device)
+    model, original_ckpt = load_configured_model(
+        args.checkpoint, device, rope=args.rope,
+        allow_plain_to_rope=args.allow_rope_conversion)
     if tokenizer.vocab_size != model.vocab_size:
         raise ValueError("Tokenizer/checkpoint vocab mismatch")
 
@@ -218,6 +220,10 @@ def main():
     parser.add_argument("--learning-rate", type=float, default=5e-5)
     parser.add_argument("--max-unk-fraction", type=float, default=.10)
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--rope", action="store_true",
+                        help="Use RoPE attention instead of legacy attention")
+    parser.add_argument("--allow-rope-conversion", action="store_true",
+                        help="Explicitly initialize RoPE attention from plain model weights")
     parser.add_argument("--overwrite", action="store_true")
     train(parser.parse_args())
 

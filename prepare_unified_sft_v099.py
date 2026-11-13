@@ -66,7 +66,7 @@ def segment_text(text: str, max_chars: int = 100) -> list[str]:
 def make_nagato_rows(text: str, *, seed: int = 42,
                      max_chars: int = 90, context_length: int = 256,
                      tokenizer=None) -> dict[str, list[dict]]:
-    """Faithful source-attributed SFT examples from existing UTF-8 corpus lines.
+    """Faithful attributed-QA AND authored-persona-response examples from corpus.
 
     No hallucinated paraphrases or fabricated Q/A facts. Unknown segments are
     not silently discarded: the caller reports all rejects.
@@ -105,12 +105,19 @@ def make_nagato_rows(text: str, *, seed: int = 42,
                 "review_state": "SOURCE_QUOTE_UNVERIFIED",
                 "example_type": "source_attributed_qa",
             }
-            if tokenizer is not None:
-                prefix = tokenizer.encode(compact_prompt(row), add_bos=True)
-                targets = tokenizer.encode(answer)
-                if len(prefix) + len(targets) > context_length:
-                    continue
-            splits[split].append(row)
+            persona_row = dict(row)
+            persona_row["id"] = row["id"] + ":persona"
+            persona_row["question"] = f"長門として「{topic}」について、次の書き出しに沿って話してください：「{cue}」"
+            persona_row["answer"] = chunk
+            persona_row["example_type"] = "persona_style_from_source"
+            row["id"] += ":source"
+            for variant in (row, persona_row):
+                if tokenizer is not None:
+                    prefix = tokenizer.encode(compact_prompt(variant), add_bos=True)
+                    targets = tokenizer.encode(variant["answer"])
+                    if len(prefix) + len(targets) > context_length:
+                        continue
+                splits[split].append(variant)
     return splits
 
 

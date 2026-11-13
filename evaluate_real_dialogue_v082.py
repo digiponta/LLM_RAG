@@ -29,7 +29,7 @@ def evaluate(args):
         raise ValueError("Test data path must be separate")
     sys.path.insert(0, str(args.gpu_dir.resolve()))
     from tokenizer import Tokenizer
-    from rope_model_v093 import load_configured_model
+    from mha_rope_v096 import load_model_v096
 
     device = torch.device("cuda" if args.device == "auto" and torch.cuda.is_available()
                           else "cpu" if args.device == "auto" else args.device)
@@ -40,7 +40,12 @@ def evaluate(args):
         ("baseline", args.baseline, getattr(args, 'baseline_rope', False)),
         ("tuned", args.tuned, getattr(args, 'tuned_rope', False)),
     ):
-        model, _ = load_configured_model(checkpoint_path, device, rope=use_rope)
+        is_mha = getattr(args, "baseline_mha", False) if name == "baseline" else getattr(args, "tuned_mha", False)
+        if is_mha and not use_rope:
+            raise ValueError(f"{name}: --{name}-mha requires --{name}-rope")
+        architecture = "mha" if is_mha else ("rope" if use_rope else "legacy")
+        model, _ = load_model_v096(checkpoint_path, device, expected=architecture,
+                                    mha_heads=getattr(args, "mha_heads", 4))
         if model.vocab_size != tokenizer.vocab_size:
             raise ValueError(f"{name}: tokenizer mismatch")
         models[name] = model
@@ -118,6 +123,11 @@ def main():
     parser.add_argument("--max-unk-fraction", type=float, default=.1)
     parser.add_argument("--seed", type=int, default=123)
     parser.add_argument("--include-text", action="store_true")
+    parser.add_argument("--baseline-mha", action="store_true",
+                        help="Baseline checkpoint uses multi-head RoPE v0.9.6")
+    parser.add_argument("--tuned-mha", action="store_true",
+                        help="Tuned checkpoint uses multi-head RoPE v0.9.6")
+    parser.add_argument("--mha-heads", type=int, default=4)
     parser.add_argument("--baseline-rope", action="store_true",
                         help="Evaluate baseline with RoPE attention")
     parser.add_argument("--tuned-rope", action="store_true",

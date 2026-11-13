@@ -109,6 +109,8 @@ def train(args):
     if args.output.resolve() == args.report.resolve():
         raise ValueError("Output and report must differ")
 
+    import sys
+    sys.path.insert(0, str(args.gpu_dir.resolve()))
     from tokenizer import Tokenizer
     device = torch.device("cuda" if args.device == "auto" and torch.cuda.is_available()
                           else "cpu" if args.device == "auto" else args.device)
@@ -194,6 +196,7 @@ def main():
     p.add_argument("--checkpoint", type=Path, default=Path("model/model-rag-rope-medium-v0.9.5.pt"))
     p.add_argument("--source", type=Path, default=Path("data/dialogue/real_persona_structured_v092/paired_legacy_train_v092.jsonl"))
     p.add_argument("--validation", type=Path, default=Path("data/dialogue/real_persona_structured_v092/paired_legacy_validation_v092.jsonl"))
+    p.add_argument("--gpu-dir", type=Path, default=Path("../LLM_GPU"))
     p.add_argument("--tokenizer", type=Path, default=Path("../LLM_GPU/model/tokenizer.json"))
     p.add_argument("--output", type=Path, default=Path("model/model-rag-intent-aux-v0.9.7.pt"))
     p.add_argument("--report", type=Path, default=Path("results/intent_aux_train_v097.json"))

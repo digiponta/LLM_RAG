@@ -129,8 +129,8 @@ def train(args):
     torch.manual_seed(args.seed)
     tokenizer = Tokenizer.load(str(args.tokenizer))
     model, original_ckpt = load_configured_model(
-        args.checkpoint, device, rope=args.rope,
-        allow_plain_to_rope=args.allow_rope_conversion)
+        args.checkpoint, device, rope=getattr(args, 'rope', False),
+        allow_plain_to_rope=getattr(args, 'allow_rope_conversion', False))
     if tokenizer.vocab_size != model.vocab_size:
         raise ValueError("Tokenizer/checkpoint vocab mismatch")
 

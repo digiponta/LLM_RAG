@@ -30,6 +30,7 @@ def evaluate(args):
     sys.path.insert(0, str(args.gpu_dir.resolve()))
     from tokenizer import Tokenizer
     from mha_rope_v096 import load_model_v096
+    from intent_model_v097 import load_intent_model
 
     device = torch.device("cuda" if args.device == "auto" and torch.cuda.is_available()
                           else "cpu" if args.device == "auto" else args.device)
@@ -44,8 +45,15 @@ def evaluate(args):
         if is_mha and not use_rope:
             raise ValueError(f"{name}: --{name}-mha requires --{name}-rope")
         architecture = "mha" if is_mha else ("rope" if use_rope else "legacy")
-        model, _ = load_model_v096(checkpoint_path, device, expected=architecture,
-                                    mha_heads=getattr(args, "mha_heads", 4))
+        use_intent = (getattr(args, "baseline_intent", False)
+                      if name == "baseline" else getattr(args, "tuned_intent", False))
+        if use_intent:
+            if not use_rope or is_mha:
+                raise ValueError(f"{name}: intent checkpoint requires single-head RoPE")
+            model, _ = load_intent_model(checkpoint_path, device)
+        else:
+            model, _ = load_model_v096(checkpoint_path, device, expected=architecture,
+                                        mha_heads=getattr(args, "mha_heads", 4))
         if model.vocab_size != tokenizer.vocab_size:
             raise ValueError(f"{name}: tokenizer mismatch")
         models[name] = model
@@ -123,6 +131,10 @@ def main():
     parser.add_argument("--max-unk-fraction", type=float, default=.1)
     parser.add_argument("--seed", type=int, default=123)
     parser.add_argument("--include-text", action="store_true")
+    parser.add_argument("--baseline-intent", action="store_true",
+                        help="Load baseline as v0.9.7 auxiliary intent checkpoint")
+    parser.add_argument("--tuned-intent", action="store_true",
+                        help="Load tuned as v0.9.7 auxiliary intent checkpoint")
     parser.add_argument("--baseline-mha", action="store_true",
                         help="Baseline checkpoint uses multi-head RoPE v0.9.6")
     parser.add_argument("--tuned-mha", action="store_true",

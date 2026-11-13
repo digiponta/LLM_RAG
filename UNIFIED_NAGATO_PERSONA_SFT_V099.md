@@ -17,11 +17,11 @@ The existing `train_real_dialogue_v082.py` builds exactly the same autoregressiv
 ### Where Nagato records differ in provenance (not in training mechanics)
 
 - The original `data/knowledge/data-nagato.txt` contains statements, opinions, speculative physics, fiction, etc., **not paired user/assistant turns**. It cannot honestly be treated as pre-existing genuine Q/A.
-- `prepare_unified_sft_v099.py` creates **synthetic, source-attributed** questions with a short exact quotation cue. The answer quotes the source verbatim inside `長門コーパスには「...」と記されています。` and includes `review_state=SOURCE_QUOTE_UNVERIFIED`.
-- A short quote cue distinguishes different source statements on the same broad topic. The answer is provenance-attributed text, not an independent verified scientific assertion or a generated paraphrase.
+- `prepare_unified_sft_v099.py` creates **two training variants** per source segment, with identical SFT schema: (1) a synthetic source-attributed question with a short quotation cue, whose answer quotes the source inside `長門コーパスには「...」と記されています。`; (2) an in-character Nagato-style prompt with a quotation cue, whose answer is the verbatim original segment. Both retain `review_state=SOURCE_QUOTE_UNVERIFIED`.
+- A short quote cue distinguishes different source statements on the same broad topic. In the attributed variant the answer is explicitly attributed; in the in-character variant it is a verbatim authored persona statement, **not independent verified scientific fact or a new paraphrase**. Both share the same original source-line provenance and split.
 - Long original lines are segmented to fit the 256-token context. All segments of a single original line stay together in the same train/validation/test split; exact duplicate lines are removed. Near-duplicates in different original lines could still leak.
 - Nagato TRAIN is repeated to a tunable mixture fraction (default 5%) because the Real Persona Chat training set is far larger. Nagato VALIDATION and TEST are never oversampled. The default 5% implies extensive repetition of a small corpus, so report overfitting and chat regressions.
-- These are source-reproduction training examples. They do **not** by themselves teach universal fact answering, self-identification as 長門有希, or faithful abstract paraphrase. The source format and quality remain a limitation.
+- These are source-reproduction and source-derived persona-response training examples. They do **not** by themselves teach universal fact answering, self-identification as 長門有希 in unrelated exchanges, or faithful abstract paraphrase. The source format and quality remain a limitation.
 
 ## Step 1 — Checkout + Windows tests
 
@@ -30,7 +30,7 @@ The existing `train_real_dialogue_v082.py` builds exactly the same autoregressiv
     git switch feature/unified-persona-nagato-sft-v0.9.9
     python -m unittest discover -s tests -v
 
-Expect previous 250 + 15 new = **265** tests; Windows CUDA training/validation remains to be performed locally.
+Expect previous 250 + 16 new = **266** tests; Windows CUDA training/validation remains to be performed locally.
 
 ## Step 2 — Generate unified local-only train and validation data
 

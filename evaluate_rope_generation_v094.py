@@ -75,7 +75,9 @@ def run(args) -> dict:
     device = torch.device("cuda" if args.device == "auto" and torch.cuda.is_available()
                           else "cpu" if args.device == "auto" else args.device)
     tok = Tokenizer.load(str(args.tokenizer))
-    legacy, _ = load_model_v096(args.baseline, device, expected="legacy")
+    legacy, _ = load_model_v096(
+        args.baseline, device,
+        expected="rope" if getattr(args, "baseline_rope", False) else "legacy")
     use_mha = getattr(args, "mha", False)
     rope, _ = load_model_v096(
         args.rope_checkpoint, device, expected="mha" if use_mha else "rope",
@@ -158,6 +160,8 @@ def main() -> None:
     p.add_argument("--seed", type=int, default=123)
     p.add_argument("--max-new-tokens", type=int, default=48)
     p.add_argument("--device", choices=("auto", "cpu", "cuda"), default="auto")
+    p.add_argument("--baseline-rope", action="store_true",
+                   help="Load the baseline checkpoint as single-head RoPE")
     p.add_argument("--mha", action="store_true",
                    help="Compare baseline to a multi-head RoPE checkpoint instead of single-head")
     p.add_argument("--mha-heads", type=int, default=4)

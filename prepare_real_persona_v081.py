@@ -83,6 +83,12 @@ def dialogue_pairs(data: object, source: str, max_prompt_chars: int = 27,
 
 
 def compact_prompt(row: dict) -> str:
+    """Legacy prompt unless an explicitly constructed structured prompt is present."""
+    if "prompt_override" in row:
+        prompt = row["prompt_override"]
+        if not isinstance(prompt, str) or not prompt or not prompt.endswith("A:"):
+            raise ValueError("Invalid structured prompt_override")
+        return prompt
     context = row.get("context")
     return (f"前:{context}\n" if context else "") + f"問:{row['question']}\n答:"
 

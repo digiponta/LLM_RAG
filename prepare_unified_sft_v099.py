@@ -87,7 +87,11 @@ def make_nagato_rows(text: str, *, seed: int = 42,
             if topic is None:
                 # A short exact excerpt is a retrieval cue, not an invented title.
                 topic = chunk[:min(12, len(chunk))]
-            question = f"長門コーパスでは「{topic}」についてどう述べていますか？"
+            # Each source statement needs a distinct prompt. A broad topic-only
+            # question would map many contradictory statements to one answer,
+            # encouraging generic replies instead of learning the source.
+            cue = chunk[:min(20, len(chunk))]
+            question = f"長門コーパスで「{topic}」について「{cue}」と始まる記述は？"
             answer = f"長門コーパスには「{chunk}」と記されています。"
             row = {
                 "id": f"nagato-v099:{digest}:{index}",

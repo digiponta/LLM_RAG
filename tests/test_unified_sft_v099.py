@@ -27,7 +27,7 @@ class UnifiedV099Tests(unittest.TestCase):
 
     def test_nagato_rows_are_real_sft_schema(self):
         rows = make_nagato_rows(self.sample_corpus())
-        example = next(iter(rows["train"]))
+        example = next(x for x in rows["train"] if x["example_type"] == "source_attributed_qa")
         self.assertTrue(all(isinstance(example[k], str) and example[k]
                             for k in ("id", "conversation_id", "question", "answer")))
         self.assertEqual(example["context"], "")
@@ -35,6 +35,15 @@ class UnifiedV099Tests(unittest.TestCase):
         self.assertIn("」と記されています。", example["answer"])
         self.assertIn("問:", compact_prompt(example))
         self.assertIn("答:", compact_prompt(example))
+
+    def test_source_and_persona_variants_share_schema_and_origin(self):
+        splits = make_nagato_rows("宇宙に関する思索です。")
+        variants = [row for rows in splits.values() for row in rows]
+        self.assertEqual(len(variants), 2)
+        self.assertEqual({v["example_type"] for v in variants},
+                         {"source_attributed_qa", "persona_style_from_source"})
+        self.assertEqual(len({v["conversation_id"] for v in variants}), 1)
+        self.assertEqual(len({v["id"] for v in variants}), 2)
 
     def test_split_stable(self):
         self.assertEqual(split_for_line("宇宙とは"), split_for_line("宇宙とは"))
@@ -55,7 +64,7 @@ class UnifiedV099Tests(unittest.TestCase):
     def test_duplicate_lines_deduplicated(self):
         source = "\n".join(["宇宙は広がっています。"] * 10)
         split_rows = make_nagato_rows(source)
-        self.assertEqual(sum(len(x) for x in split_rows.values()), 1)
+        self.assertEqual(sum(len(x) for x in split_rows.values()), 2)
 
     def test_long_lines_chunked_without_fabrication(self):
         line = "宇宙の観測。" * 40
@@ -122,7 +131,10 @@ class UnifiedV099Tests(unittest.TestCase):
         statement = "量子についての意見です。"
         rows = make_nagato_rows(statement)
         values = [r["answer"] for items in rows.values() for r in items]
-        self.assertEqual(values, ["長門コーパスには「" + statement + "」と記されています。"])
+        self.assertEqual(set(values), {
+            "長門コーパスには「" + statement + "」と記されています。",
+            statement,
+        })
 
 
 if __name__ == "__main__":

@@ -28,16 +28,19 @@ def evaluate(args):
     if args.test_data.resolve() in {args.baseline.resolve(), args.tuned.resolve(), args.output.resolve()}:
         raise ValueError("Test data path must be separate")
     sys.path.insert(0, str(args.gpu_dir.resolve()))
-    from model import LanguageModel
     from tokenizer import Tokenizer
+    from rope_model_v093 import load_configured_model
 
     device = torch.device("cuda" if args.device == "auto" and torch.cuda.is_available()
                           else "cpu" if args.device == "auto" else args.device)
     tokenizer = Tokenizer.load(str(args.tokenizer))
     rows = load_dialogue_rows(args.test_data, args.sample, args.seed)
     models = {}
-    for name, checkpoint_path in (("baseline", args.baseline), ("tuned", args.tuned)):
-        model, _ = LanguageModel.load_checkpoint(str(checkpoint_path), device=device)
+    for name, checkpoint_path, use_rope in (
+        ("baseline", args.baseline, args.baseline_rope),
+        ("tuned", args.tuned, args.tuned_rope),
+    ):
+        model, _ = load_configured_model(checkpoint_path, device, rope=use_rope)
         if model.vocab_size != tokenizer.vocab_size:
             raise ValueError(f"{name}: tokenizer mismatch")
         models[name] = model
@@ -115,6 +118,10 @@ def main():
     parser.add_argument("--max-unk-fraction", type=float, default=.1)
     parser.add_argument("--seed", type=int, default=123)
     parser.add_argument("--include-text", action="store_true")
+    parser.add_argument("--baseline-rope", action="store_true",
+                        help="Evaluate baseline with RoPE attention")
+    parser.add_argument("--tuned-rope", action="store_true",
+                        help="Evaluate tuned checkpoint with RoPE attention")
     parser.add_argument("--overwrite", action="store_true")
     evaluate(parser.parse_args())
 

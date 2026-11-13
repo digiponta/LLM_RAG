@@ -155,6 +155,9 @@ def mix_training_rows(persona_rows: list[dict], nagato_rows: list[dict],
              for row in persona_rows]
     for i, row in enumerate(selected):
         copy = dict(row)
+        # The mixed SFT schema must be source-complete even if a caller
+        # supplies minimal Nagato rows without optional metadata.
+        copy["source_kind"] = "nagato_corpus"
         copy["id"] = f"{row['id']}:repeat{i}"
         copy["repeat_index"] = i
         mixed.append(copy)

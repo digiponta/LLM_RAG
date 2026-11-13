@@ -122,15 +122,21 @@ def train(args):
 
     sys.path.insert(0, str(args.gpu_dir.resolve()))
     from tokenizer import Tokenizer
-    from rope_model_v093 import load_configured_model
+    from mha_rope_v096 import load_model_v096
     device = torch.device("cuda" if args.device == "auto" and torch.cuda.is_available()
                           else "cpu" if args.device == "auto" else args.device)
     random.seed(args.seed)
     torch.manual_seed(args.seed)
     tokenizer = Tokenizer.load(str(args.tokenizer))
-    model, original_ckpt = load_configured_model(
-        args.checkpoint, device, rope=getattr(args, 'rope', False),
-        allow_plain_to_rope=getattr(args, 'allow_rope_conversion', False))
+    use_mha = getattr(args, "mha", False)
+    if use_mha and not getattr(args, "rope", False):
+        raise ValueError("--mha requires --rope")
+    architecture = "mha" if use_mha else ("rope" if getattr(args, "rope", False) else "legacy")
+    model, original_ckpt = load_model_v096(
+        args.checkpoint, device, expected=architecture,
+        mha_heads=getattr(args, "mha_heads", 4),
+        allow_mha_conversion=getattr(args, "allow_mha_conversion", False),
+        allow_rope_conversion=getattr(args, "allow_rope_conversion", False))
     if tokenizer.vocab_size != model.vocab_size:
         raise ValueError("Tokenizer/checkpoint vocab mismatch")
 
@@ -184,7 +190,7 @@ def train(args):
             }, args.output)
             saved = True
     report = {
-        "version": "v0.8.2", "source_checkpoint": str(args.checkpoint),
+        "version": "v0.9.6" if use_mha else "v0.8.2", "source_checkpoint": str(args.checkpoint),
         "output_checkpoint": str(args.output), "device": str(device),
         "source_train": str(args.source), "source_validation": str(args.validation),
         "selected_train": len(train_rows), "selected_validation": len(val_rows),
@@ -222,6 +228,12 @@ def main():
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--rope", action="store_true",
                         help="Use RoPE attention instead of legacy attention")
+    parser.add_argument("--mha", action="store_true",
+                        help="Use multi-head RoPE v0.9.6 checkpoint (requires --rope)")
+    parser.add_argument("--mha-heads", type=int, default=4,
+                        help="Number of RoPE attention heads; checkpoint must match")
+    parser.add_argument("--allow-mha-conversion", action="store_true",
+                        help="Explicitly convert a single-head RoPE checkpoint")
     parser.add_argument("--allow-rope-conversion", action="store_true",
                         help="Explicitly initialize RoPE attention from plain model weights")
     parser.add_argument("--overwrite", action="store_true")

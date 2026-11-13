@@ -70,13 +70,18 @@ def run(args) -> dict:
     import torch
     sys.path.insert(0, str(args.gpu_dir.resolve()))
     from tokenizer import Tokenizer
-    from rope_model_v093 import load_configured_model
+    from mha_rope_v096 import load_model_v096
 
     device = torch.device("cuda" if args.device == "auto" and torch.cuda.is_available()
                           else "cpu" if args.device == "auto" else args.device)
     tok = Tokenizer.load(str(args.tokenizer))
-    legacy, _ = load_configured_model(args.baseline, device, rope=False)
-    rope, _ = load_configured_model(args.rope_checkpoint, device, rope=True)
+    legacy, _ = load_model_v096(
+        args.baseline, device,
+        expected="rope" if getattr(args, "baseline_rope", False) else "legacy")
+    use_mha = getattr(args, "mha", False)
+    rope, _ = load_model_v096(
+        args.rope_checkpoint, device, expected="mha" if use_mha else "rope",
+        mha_heads=getattr(args, "mha_heads", 4))
     if (legacy.vocab_size != rope.vocab_size or legacy.vocab_size != tok.vocab_size or
         legacy.context_length != rope.context_length):
         raise ValueError("Model vocab/context mismatch")
@@ -155,6 +160,11 @@ def main() -> None:
     p.add_argument("--seed", type=int, default=123)
     p.add_argument("--max-new-tokens", type=int, default=48)
     p.add_argument("--device", choices=("auto", "cpu", "cuda"), default="auto")
+    p.add_argument("--baseline-rope", action="store_true",
+                   help="Load the baseline checkpoint as single-head RoPE")
+    p.add_argument("--mha", action="store_true",
+                   help="Compare baseline to a multi-head RoPE checkpoint instead of single-head")
+    p.add_argument("--mha-heads", type=int, default=4)
     p.add_argument("--include-text", action="store_true")
     p.add_argument("--output", type=Path, default=Path("results/rope_generation_v094.json"))
     p.add_argument("--overwrite", action="store_true")

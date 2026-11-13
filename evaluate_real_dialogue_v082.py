@@ -37,8 +37,8 @@ def evaluate(args):
     rows = load_dialogue_rows(args.test_data, args.sample, args.seed)
     models = {}
     for name, checkpoint_path, use_rope in (
-        ("baseline", args.baseline, args.baseline_rope),
-        ("tuned", args.tuned, args.tuned_rope),
+        ("baseline", args.baseline, getattr(args, 'baseline_rope', False)),
+        ("tuned", args.tuned, getattr(args, 'tuned_rope', False)),
     ):
         model, _ = load_configured_model(checkpoint_path, device, rope=use_rope)
         if model.vocab_size != tokenizer.vocab_size:

@@ -71,21 +71,28 @@ def decode_answer(model, tokenizer, prompt: str, *, max_new_tokens: int = 48,
 
 def resolve_rope(encoding: str, checkpoint_config: dict) -> bool:
     marker = checkpoint_config.get("position_encoding", "none")
-    if marker not in ("none", "rope_v093"):
+    if marker not in ("none", "rope_v093", "rope_v096_mha"):
         raise ValueError(f"Unsupported position encoding {marker!r}")
     if encoding == "auto":
-        return marker == "rope_v093"
-    wanted = encoding == "rope"
-    if wanted != (marker == "rope_v093"):
+        return marker != "none"
+    if encoding == "legacy":
+        wanted = "none"
+    elif encoding == "rope":
+        wanted = "rope_v093"
+    elif encoding == "mha":
+        wanted = "rope_v096_mha"
+    else:
+        raise ValueError("encoding must be auto|legacy|rope|mha")
+    if marker != wanted:
         raise ValueError("Requested attention is incompatible with checkpoint")
-    return wanted
+    return marker != "none"
 
 
 def load_chat(args):
     import torch
     sys.path.insert(0, str(args.gpu_dir.resolve()))
     from tokenizer import Tokenizer
-    from rope_model_v093 import load_configured_model
+    from mha_rope_v096 import load_model_v096, checkpoint_architecture
 
     device = torch.device(
         "cuda" if args.device == "auto" and torch.cuda.is_available()
@@ -93,7 +100,9 @@ def load_chat(args):
     # Only locally trusted checkpoints should be loaded with torch.load.
     checkpoint = torch.load(str(args.checkpoint), map_location="cpu", weights_only=True)
     encoding = resolve_rope(args.encoding, checkpoint["config"])
-    model, _ = load_configured_model(args.checkpoint, device, rope=encoding)
+    architecture, heads = checkpoint_architecture(checkpoint["config"])
+    model, _ = load_model_v096(args.checkpoint, device, expected=architecture,
+                              mha_heads=heads)
     tokenizer = Tokenizer.load(str(args.tokenizer))
     if model.vocab_size != tokenizer.vocab_size:
         raise ValueError("Checkpoint and tokenizer vocabulary mismatch")
@@ -112,10 +121,10 @@ def run(args) -> None:
     random.seed(args.seed)
     model, tok, device, rope = load_chat(args)
     print("=" * 64)
-    print(" LLM_RAG v0.9.5 — Local Chat")
+    print(" LLM_RAG v0.9.6 — Local Chat")
     print("=" * 64)
     print(f"Model     : {args.checkpoint}")
-    print(f"Attention : {'RoPE' if rope else 'Legacy'}")
+    print(f"Attention : {'Multi-Head RoPE (' + str(model.num_heads) + ' heads)' if getattr(model, 'num_heads', 1) > 1 else ('RoPE' if rope else 'Legacy')}")
     print(f"Device    : {device}")
     print(f"Context   : {model.context_length}, Parameters: {model.parameter_count:,}")
     print("Commands  : /reset  /status  /reload  /sources  /exit")
@@ -191,7 +200,7 @@ def main():
     p.add_argument("--checkpoint", type=Path,
                    default=Path("model/model-rag-rope-legacy-v0.9.3.pt"))
     p.add_argument("--device", choices=("auto", "cpu", "cuda"), default="auto")
-    p.add_argument("--encoding", choices=("auto", "legacy", "rope"), default="auto")
+    p.add_argument("--encoding", choices=("auto", "legacy", "rope", "mha"), default="auto")
     p.add_argument("--max-new-tokens", type=int, default=48)
     p.add_argument("--temperature", type=float, default=0.0)
     p.add_argument("--top-k", type=int, default=40)

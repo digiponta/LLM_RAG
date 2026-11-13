@@ -93,6 +93,7 @@ def load_chat(args):
     sys.path.insert(0, str(args.gpu_dir.resolve()))
     from tokenizer import Tokenizer
     from mha_rope_v096 import load_model_v096, checkpoint_architecture
+    from intent_model_v097 import load_intent_model
 
     device = torch.device(
         "cuda" if args.device == "auto" and torch.cuda.is_available()
@@ -101,8 +102,13 @@ def load_chat(args):
     checkpoint = torch.load(str(args.checkpoint), map_location="cpu", weights_only=True)
     encoding = resolve_rope(args.encoding, checkpoint["config"])
     architecture, heads = checkpoint_architecture(checkpoint["config"])
-    model, _ = load_model_v096(args.checkpoint, device, expected=architecture,
-                              mha_heads=heads)
+    if checkpoint["config"].get("auxiliary_head") == "dialogue_intent_v097":
+        if architecture != "rope":
+            raise ValueError("Intent head is supported only for single-head RoPE")
+        model, _ = load_intent_model(args.checkpoint, device)
+    else:
+        model, _ = load_model_v096(args.checkpoint, device, expected=architecture,
+                                  mha_heads=heads)
     tokenizer = Tokenizer.load(str(args.tokenizer))
     if model.vocab_size != tokenizer.vocab_size:
         raise ValueError("Checkpoint and tokenizer vocabulary mismatch")
@@ -121,7 +127,7 @@ def run(args) -> None:
     random.seed(args.seed)
     model, tok, device, rope = load_chat(args)
     print("=" * 64)
-    print(" LLM_RAG v0.9.6 — Local Chat")
+    print(" LLM_RAG v0.9.7 — Local Chat")
     print("=" * 64)
     print(f"Model     : {args.checkpoint}")
     print(f"Attention : {'Multi-Head RoPE (' + str(model.num_heads) + ' heads)' if getattr(model, 'num_heads', 1) > 1 else ('RoPE' if rope else 'Legacy')}")
@@ -184,6 +190,19 @@ def run(args) -> None:
             continue
         display = answer.strip() or "(生成できませんでした)"
         print(f"AI> {display}")
+        if args.show_intent and hasattr(model, "intent_head"):
+            import torch
+            from intent_model_v097 import INTENTS
+            with torch.inference_mode():
+                prompt_ids = torch.tensor(
+                    [tok.encode(prompt, add_bos=True)], device=next(model.parameters()).device,
+                    dtype=torch.long)
+                _, logits = model.forward_with_intent(
+                    prompt_ids, torch.tensor([prompt_ids.shape[1]-1], device=prompt_ids.device))
+                probabilities = torch.softmax(logits[0], dim=-1)
+                label = int(probabilities.argmax().item())
+                print(f"[Intent (weak supervision): {INTENTS[label]}, confidence={probabilities[label]:.3f}; "
+                      "not a fact/answer validity judgment]")
         if sources:
             print("RAG sources (unverified): " + ", ".join(sources))
         # Keep the real model output, not the display placeholder.
@@ -211,6 +230,8 @@ def main():
     p.add_argument("--docs", type=Path, default=Path("data/knowledge"))
     p.add_argument("--top-k-docs", type=int, default=1)
     p.add_argument("--evidence-chars", type=int, default=32)
+    p.add_argument("--show-intent", action="store_true",
+                   help="Print experimental weakly trained intent prediction when available")
     p.add_argument("--verbose", action="store_true")
     run(p.parse_args())
 

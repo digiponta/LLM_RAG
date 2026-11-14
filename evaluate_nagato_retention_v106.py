@@ -94,8 +94,11 @@ def score(args):
         load_dialogue_rows, encode_dialogue, collate_dialogue, evaluate_answer_nll)
 
     datasets = (args.nagato_validation, args.unified_validation, args.binding_validation)
+    candidate_path = getattr(args, "candidate_checkpoint", None)
     paths = [*datasets, args.tokenizer, args.binding_checkpoint,
              args.copy_checkpoint, args.position_checkpoint, args.output]
+    if candidate_path is not None:
+        paths.append(candidate_path)
     if len({p.resolve() for p in paths}) != len(paths):
         raise ValueError("Input/output path collision")
     guard_validation_paths(datasets)
@@ -107,11 +110,14 @@ def score(args):
                           else "cpu" if args.device == "auto" else args.device)
     tok = Tokenizer.load(str(args.tokenizer))
     models = {}
-    for name, path in (
+    checkpoints = [
         ("binding_v100", args.binding_checkpoint),
         ("copy_v103", args.copy_checkpoint),
         ("position_v105", args.position_checkpoint),
-    ):
+    ]
+    if candidate_path is not None:
+        checkpoints.append(("multitask_v107", candidate_path))
+    for name, path in checkpoints:
         model, _ = load_model_v096(path, device, expected="rope")
         if model.vocab_size != tok.vocab_size:
             raise ValueError(f"{name}: tokenizer mismatch")
@@ -187,10 +193,7 @@ def score(args):
     report = {
         "version": "v0.10.6",
         "validation_only": True,
-        "checkpoints": {name: str(path) for name, path in (
-            ("binding_v100", args.binding_checkpoint),
-            ("copy_v103", args.copy_checkpoint),
-            ("position_v105", args.position_checkpoint))},
+        "checkpoints": {name: str(path) for name, path in checkpoints},
         "tasks": results,
         "text_included": bool(args.include_text),
         "warnings": (
@@ -232,6 +235,8 @@ def main():
         "model/model-rag-position-v0.10.5.pt"))
     p.add_argument("--output", type=Path, default=Path(
         "results/nagato_retention_v106.json"))
+    p.add_argument("--candidate-checkpoint", type=Path, default=None,
+                   help="Optional v0.10.7 mixed SFT model to compare on same samples")
     p.add_argument("--max-rows", type=int, default=200)
     p.add_argument("--generations", type=int, default=12)
     p.add_argument("--batch-size", type=int, default=16)

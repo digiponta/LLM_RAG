@@ -95,3 +95,7 @@ Before further training, compare two **frozen** unified RoPE Medium checkpoints 
 ## v0.10.6 Nagato Knowledge & Persona Retention
 
 `evaluate_nagato_retention_v106.py` compares the **same three frozen checkpoints** (v0.10.0 binding, v0.10.3 copy, v0.10.5 position) on four **VALIDATION** tracks: Nagato attributed knowledge answers, Nagato persona-source style responses, Real Persona Chat dialogue, and oracle-evidence source binding. Reports answer-only token NLL and selected generation exact/length/EOS metrics, with local-only optional text review. It does not read the final Nagato TEST or train another checkpoint. Exact match and NLL are proxies rather than human-rated quality or factual truth. See [NAGATO_RETENTION_V106.md](NAGATO_RETENTION_V106.md).
+
+## v0.10.7 Balanced Multi-Task SFT and Retention Gate
+
+`prepare_balanced_multitask_v107.py` makes source-separated six-task TRAIN/VALIDATION mixes with initial ratios 40% Real Persona, 20% Nagato knowledge, 15% Nagato persona, 15% oracle evidence binding, 5% position, 5% copy, with deterministic sampling and a capped-repetition audit. Fine-tune from the preserved v0.10.0 checkpoint (never replace earlier models). `evaluate_nagato_retention_v106.py --candidate-checkpoint` now compares the v0.10.7 candidate on the same four tasks, and `evaluate_multitask_gate_v107.py` checks per-task NLL non-regression plus position extraction and EOS. Development pass never auto-promotes a checkpoint. See [BALANCED_MULTITASK_V107.md](BALANCED_MULTITASK_V107.md).

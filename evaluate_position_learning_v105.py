@@ -18,6 +18,7 @@ from evaluate_evidence_position_v104 import position_row, swap_pairs
 from evaluate_generation_diagnostics_v098 import first_token_diagnostic
 from prepare_real_persona_v081 import compact_prompt
 from train_real_dialogue_v082 import load_dialogue_rows
+from task_conditioning_v108 import tagged
 
 
 def decode_one(model, tokenizer, row, limit=4):
@@ -138,7 +139,8 @@ def evaluate(args):
                           "kind": original["copy_kind"],
                           "position": pos, "variant": variant, "gold": source["answer"]}
                 for name, model in models.items():
-                    result[name] = decode_one(model, tok, source, args.max_new_tokens)
+                    input_row = tagged(source, "position") if name == "tuned" and getattr(args, "tuned_task_tag", False) else source
+                    result[name] = decode_one(model, tok, input_row, args.max_new_tokens)
                 rows.append(result)
                 pair.append(result)
             comparisons.append(pair)
@@ -155,6 +157,7 @@ def evaluate(args):
         "model_checkpoints": {"baseline": str(args.baseline), "tuned": str(args.tuned)},
         "groups": groups, "counterfactuals": changes, "details": rows,
         "text_included": bool(args.include_text),
+        "tuned_task_tag": bool(getattr(args, "tuned_task_tag", False)),
         "limitation": (
             "The requested character exists verbatim in evidence. "
             "Development results are not independent final test results. "
@@ -189,6 +192,8 @@ def main():
     p.add_argument("--max-new-tokens", type=int, default=4)
     p.add_argument("--device", choices=("auto", "cpu", "cuda"), default="auto")
     p.add_argument("--include-text", action="store_true")
+    p.add_argument("--tuned-task-tag", action="store_true",
+                   help="Use [TASK:POSITION] only on tuned model, matching tagged SFT training")
     p.add_argument("--overwrite", action="store_true")
     args = p.parse_args()
     if args.tokenizer is None:

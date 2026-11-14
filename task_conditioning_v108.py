@@ -22,13 +22,19 @@ def tagged(row, task=None):
     mode = task if task is not None else row.get("multitask")
     if mode not in TAG_BY_TASK:
         raise ValueError(f"Unknown task label: {mode}")
-    if "prompt_override" in row:
-        raise ValueError("Refuse mixed structured prompt_override: no deterministic injection")
     clone = dict(row)
-    context = row.get("context") or ""
     tag = TAG_BY_TASK[mode]
-    if context.startswith("[TASK:"):
-        raise ValueError("Row already contains a task marker")
-    clone["context"] = tag + ("\n" + context if context else "")
+    if "prompt_override" in row:
+        prompt = row["prompt_override"]
+        if not isinstance(prompt, str) or not prompt.endswith("A:"):
+            raise ValueError("Invalid prompt_override")
+        if prompt.startswith("[TASK:"):
+            raise ValueError("Already tagged structured prompt")
+        clone["prompt_override"] = tag + "\n" + prompt
+    else:
+        context = row.get("context") or ""
+        if context.startswith("[TASK:"):
+            raise ValueError("Row already contains a task marker")
+        clone["context"] = tag + ("\n" + context if context else "")
     clone["task_marker"] = tag
     return clone

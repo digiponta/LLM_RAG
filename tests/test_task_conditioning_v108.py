@@ -60,11 +60,11 @@ class V108Tests(unittest.TestCase):
         with self.assertRaises(ValueError):
             tagged(self.make(), "unrecognized")
 
-    def test_reject_override(self):
-        row = self.make()
+    def test_structured_override_preserved(self):
+        row = self.make("real_persona")
         row["prompt_override"] = "Q:foo\nA:"
-        with self.assertRaises(ValueError):
-            tagged(row)
+        self.assertEqual(compact_prompt(tagged(row)),
+                         "[TASK:CHAT]\nQ:foo\nA:")
 
     def test_encode_answer_eos(self):
         tok = FakeTokenizer()

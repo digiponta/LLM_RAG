@@ -103,8 +103,8 @@ def quota(total, weights=WEIGHTS):
     return numbers
 
 
-def sample_balanced(groups, total, *, seed=42, max_repeat=8, split="train"):
-    amounts = quota(total)
+def sample_balanced(groups, total, *, seed=42, max_repeat=8, split="train", weights=WEIGHTS):
+    amounts = quota(total, weights)
     if max_repeat < 1:
         raise ValueError("max_repeat must be >=1")
     result, audit = [], {}

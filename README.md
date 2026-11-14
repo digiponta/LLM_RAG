@@ -91,3 +91,7 @@ Before further training, compare two **frozen** unified RoPE Medium checkpoints 
 ## v0.10.5 Position Learning SFT
 
 `prepare_position_learning_v105.py` derives 1st/5th/10th-character question-answer pairs from source-disjoint v0.10.3 TRAIN and DEVELOPMENT data, excluding any source with unknown target characters. The shared trainer `train_real_dialogue_v082.py` now supports opt-in `--min-answer-tokens 1` (default remains 2) so one-character answers and EOS both receive SFT supervision. `evaluate_position_learning_v105.py` compares v0.10.3 and v0.10.5 on heldout development examples, measuring answer selection, exact one-character generation, gold-conditioned EOS and actual paired correct tracking after evidence swaps. This is a research experiment, not a general chat release. See [POSITION_LEARNING_V105.md](POSITION_LEARNING_V105.md).
+
+## v0.10.6 Nagato Knowledge & Persona Retention
+
+`evaluate_nagato_retention_v106.py` compares the **same three frozen checkpoints** (v0.10.0 binding, v0.10.3 copy, v0.10.5 position) on four **VALIDATION** tracks: Nagato attributed knowledge answers, Nagato persona-source style responses, Real Persona Chat dialogue, and oracle-evidence source binding. Reports answer-only token NLL and selected generation exact/length/EOS metrics, with local-only optional text review. It does not read the final Nagato TEST or train another checkpoint. Exact match and NLL are proxies rather than human-rated quality or factual truth. See [NAGATO_RETENTION_V106.md](NAGATO_RETENTION_V106.md).

@@ -101,7 +101,10 @@ class CopyV101Tests(unittest.TestCase):
         result = score_copy("宇宙時間", "宇宙空間", eos=False)
         self.assertFalse(result["exact_match"])
         self.assertEqual(result["prefix_chars"], 2)
-        self.assertEqual(result["position_accuracy"], .5)
+        # 宇宙時間 vs 宇宙空間: 宇/宙/間 match by position (3/4),
+        # while contiguous common-prefix coverage remains 2/4.
+        self.assertEqual(result["position_accuracy"], .75)
+        self.assertEqual(result["prefix_coverage"], .5)
 
     def test_score_copy_no_answer(self):
         result = score_copy("宇宙", "", eos=False)

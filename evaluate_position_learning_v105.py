@@ -33,6 +33,9 @@ def decode_one(model, tokenizer, row, limit=4):
     # Teacher-forced EOS probability is distinct from free generation EOS.
     with torch.inference_mode():
         device = next(model.parameters()).device
+        prompt_seq = torch.tensor([prefix], dtype=torch.long, device=device)
+        first_logits = model(prompt_seq)[0, -1].float()
+        first_eos_probability = float(first_logits.softmax(dim=-1)[tokenizer.eos_id].item())
         seq = torch.tensor([prefix + gold], dtype=torch.long, device=device)
         logits = model(seq)[0, -1].float()
         eos_probability = float(logits.softmax(dim=-1)[tokenizer.eos_id].item())
@@ -46,6 +49,8 @@ def decode_one(model, tokenizer, row, limit=4):
         "first_token_correct": first["correct"],
         "first_token_probability": first["target_probability"],
         "gold_eos_probability": eos_probability,
+        "first_step_eos_probability": first_eos_probability,
+        "empty_response": len(response) == 0,
         "ended_by_eos": bool(tail and tail[-1] == tokenizer.eos_id),
         "generated_chars": len(response),
         "gold_token_count": len(gold),
@@ -72,6 +77,8 @@ def aggregate(entries, model):
             "exact_rate": sum(s["exact"] for s in scores) / n,
             "first_token_accuracy": sum(s["first_token_correct"] for s in scores) / n,
             "mean_gold_eos_probability": sum(s["gold_eos_probability"] for s in scores) / n,
+            "mean_first_step_eos_probability": sum(s.get("first_step_eos_probability", 0) for s in scores) / n,
+            "empty_response_fraction": sum(s.get("empty_response", False) for s in scores) / n,
             "eos_termination_fraction": sum(s["ended_by_eos"] for s in scores) / n,
             "mean_generated_chars": sum(s["generated_chars"] for s in scores) / n,
         }

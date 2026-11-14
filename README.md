@@ -71,3 +71,7 @@ Real Persona Chat and `data/knowledge/data-nagato.txt` now share the **same SFT 
 ## v0.10.0 evidence-conditioned knowledge binding
 
 Use `python prepare_knowledge_binding_v100.py` to prepare attributed Nagato direct and follow-up QA with verbatim `資料:` evidence using the same SFT schema as Real Persona Chat. Continue training from the v0.9.9 unified RoPE Medium checkpoint and evaluate **matched evidence-provided versus no-evidence held-out test sets**. See [KNOWLEDGE_BINDING_V100.md](KNOWLEDGE_BINDING_V100.md) for Windows commands and the distinction between oracle evidence conditioning and automatic retrieval. Training/validation data and checkpoints stay local.
+
+## v0.10.1 Evidence Copy Diagnostics
+
+Before further training, compare two **frozen** unified RoPE Medium checkpoints on faithful 10/30/50-character copying from Nagato TEST source lines. `evaluate_evidence_copy_v101.py` reports exact match, first-token, prefix, position, similarity and EOS measurements without exposing source text by default. It does not train, retrieve evidence, or claim knowledge; see [EVIDENCE_COPY_DIAGNOSTICS_V101.md](EVIDENCE_COPY_DIAGNOSTICS_V101.md).

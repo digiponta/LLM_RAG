@@ -64,10 +64,10 @@ def encode_dialogue(row, tokenizer, context_length: int,
     return (x, labels), "accepted"
 
 
-def prepare_sequences(rows, tokenizer, context_length: int, max_unknown_fraction: float):
+def prepare_sequences(rows, tokenizer, context_length: int, max_unknown_fraction: float, min_answer_tokens: int = 2):
     pairs, stats = [], Counter()
     for row in rows:
-        sequence, reason = encode_dialogue(row, tokenizer, context_length, max_unknown_fraction)
+        sequence, reason = encode_dialogue(row, tokenizer, context_length, max_unknown_fraction, min_answer_tokens=min_answer_tokens)
         stats[reason] += 1
         if sequence is not None:
             pairs.append(sequence)
@@ -108,6 +108,8 @@ def train(args):
         raise ValueError("epochs, batch-size and learning-rate must be positive")
     if args.max_train < 0 or args.max_validation < 0:
         raise ValueError("sample limits must be >=0")
+    if getattr(args, "min_answer_tokens", 2) < 1:
+        raise ValueError("min-answer-tokens must be >= 1")
     if not 0 <= args.max_unk_fraction <= 1:
         raise ValueError("max-unk-fraction must be within [0,1]")
     if args.source.resolve() == args.validation.resolve():
@@ -146,8 +148,8 @@ def train(args):
         raise ValueError("Train/validation ID overlap")
     if {r["conversation_id"] for r in train_rows}.intersection(r["conversation_id"] for r in val_rows):
         raise ValueError("Train/validation dialogue overlap")
-    train_pairs, stats_train = prepare_sequences(train_rows, tokenizer, model.context_length, args.max_unk_fraction)
-    val_pairs, stats_val = prepare_sequences(val_rows, tokenizer, model.context_length, args.max_unk_fraction)
+    train_pairs, stats_train = prepare_sequences(train_rows, tokenizer, model.context_length, args.max_unk_fraction, min_answer_tokens=getattr(args, "min_answer_tokens", 2))
+    val_pairs, stats_val = prepare_sequences(val_rows, tokenizer, model.context_length, args.max_unk_fraction, min_answer_tokens=getattr(args, "min_answer_tokens", 2))
     if not train_pairs or not val_pairs:
         raise ValueError("No valid training/validation sequences; inspect UNK and context stats")
     print(f"Device={device} context={model.context_length} vocab={model.vocab_size}")
@@ -194,6 +196,7 @@ def train(args):
         "output_checkpoint": str(args.output), "device": str(device),
         "source_train": str(args.source), "source_validation": str(args.validation),
         "selected_train": len(train_rows), "selected_validation": len(val_rows),
+        "min_answer_tokens": getattr(args, "min_answer_tokens", 2),
         "usable_train": len(train_pairs), "usable_validation": len(val_pairs),
         "filter_train": stats_train, "filter_validation": stats_val,
         "baseline_validation_answer_nll": base_nll, "best_validation_answer_nll": best_nll,
@@ -225,6 +228,8 @@ def main():
     parser.add_argument("--batch-size", type=int, default=32)
     parser.add_argument("--learning-rate", type=float, default=5e-5)
     parser.add_argument("--max-unk-fraction", type=float, default=.10)
+    parser.add_argument("--min-answer-tokens", type=int, default=2,
+                        help="Minimum answer tokens; use 1 only for explicitly trained single-character extraction")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--rope", action="store_true",
                         help="Use RoPE attention instead of legacy attention")

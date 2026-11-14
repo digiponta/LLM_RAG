@@ -83,3 +83,7 @@ Before further training, compare two **frozen** unified RoPE Medium checkpoints 
 ## v0.10.3 Generalized Copy Learning
 
 `prepare_generalized_copy_v103.py` builds 2,000 mixed natural/synthetic 10-character copy TRAIN examples and 200 source-separated DEVELOPMENT examples from original Nagato TRAIN and VALIDATION only. `train_real_dialogue_v082.py` continues the existing RoPE Medium SFT model; `evaluate_generalized_copy_v103.py` measures exact copying, first-token accuracy, prefix and positional character accuracy independently for natural and synthetic unseen strings. Final Nagato TEST remains untouched. See [GENERALIZED_COPY_V103.md](GENERALIZED_COPY_V103.md) for exact Windows commands and evaluation boundaries.
+
+## v0.10.4 Evidence Position Probe
+
+`evaluate_evidence_position_v104.py` compares frozen v0.10.0 and v0.10.3 checkpoints on explicit 1st/5th/10th Unicode-character extraction, with same-category counterfactual evidence swapping on the source-disjoint DEVELOPMENT set. It logs exact-character accuracy, token rank, and output sensitivity without exposing source text by default. These new instructions were *not trained*; failure is not a RoPE/attention diagnosis. See [EVIDENCE_POSITION_PROBE_V104.md](EVIDENCE_POSITION_PROBE_V104.md).

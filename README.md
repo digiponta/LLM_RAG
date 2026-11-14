@@ -87,3 +87,7 @@ Before further training, compare two **frozen** unified RoPE Medium checkpoints 
 ## v0.10.4 Evidence Position Probe
 
 `evaluate_evidence_position_v104.py` compares frozen v0.10.0 and v0.10.3 checkpoints on explicit 1st/5th/10th Unicode-character extraction, with same-category counterfactual evidence swapping on the source-disjoint DEVELOPMENT set. It logs exact-character accuracy, token rank, and output sensitivity without exposing source text by default. These new instructions were *not trained*; failure is not a RoPE/attention diagnosis. See [EVIDENCE_POSITION_PROBE_V104.md](EVIDENCE_POSITION_PROBE_V104.md).
+
+## v0.10.5 Position Learning SFT
+
+`prepare_position_learning_v105.py` derives 1st/5th/10th-character question-answer pairs from source-disjoint v0.10.3 TRAIN and DEVELOPMENT data, excluding any source with unknown target characters. The shared trainer `train_real_dialogue_v082.py` now supports opt-in `--min-answer-tokens 1` (default remains 2) so one-character answers and EOS both receive SFT supervision. `evaluate_position_learning_v105.py` compares v0.10.3 and v0.10.5 on heldout development examples, measuring answer selection, exact one-character generation, gold-conditioned EOS and actual paired correct tracking after evidence swaps. This is a research experiment, not a general chat release. See [POSITION_LEARNING_V105.md](POSITION_LEARNING_V105.md).

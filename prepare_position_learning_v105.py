@@ -25,6 +25,8 @@ def transform(rows, tok, *, split, positions=POSITIONS, context_length=256):
         raise ValueError("Invalid positions")
     results, counts = [], Counter()
     for source in rows:
+        group = []
+        rejected_reason = None
         for position in positions:
             if position > len(source["answer"]):
                 raise ValueError("Source shorter than requested position")
@@ -35,13 +37,22 @@ def transform(rows, tok, *, split, positions=POSITIONS, context_length=256):
             item["copy_kind"] = source["copy_kind"]
             item["char_position"] = position
             item["source_row_id"] = source["id"]
+            gold_tokens = tok.encode(item["answer"])
+            if not gold_tokens or tok.unk_id in gold_tokens:
+                rejected_reason = "unknown_target"
+                break
             encoded, reason = encode_dialogue(item, tok, context_length, .10,
                                                min_answer_tokens=1)
             if encoded is None:
-                counts[reason] += 1
-                continue
+                rejected_reason = reason
+                break
+            group.append(item)
+        if rejected_reason:
+            counts[f"source_rejected_{rejected_reason}"] += 1
+            continue
+        results.extend(group)
+        for position in positions:
             counts[f"position_{position}_accepted"] += 1
-            results.append(item)
     if not results:
         raise ValueError("No accepted position examples")
     return results, dict(counts)
@@ -80,8 +91,9 @@ def prepare(args):
     dev, stats_dev = transform(dev_rows, tok, split="development",
                                positions=args.positions, context_length=args.context_length)
     guard(train, dev)
-    if len(train) != len(train_rows) * len(args.positions) or len(dev) != len(dev_rows) * len(args.positions):
-        raise ValueError("Some position records were rejected: reduce unknown fraction or inspect input")
+    # All positions belonging to a source are included together, or none.
+    # A source with an unlearnable <unk> target is excluded, rather than
+    # silently treating an impossible character-label as correct.
     args.output_dir.mkdir(parents=True, exist_ok=True)
     write_jsonl(paths["train"], train)
     write_jsonl(paths["development"], dev)

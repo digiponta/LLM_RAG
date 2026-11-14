@@ -59,11 +59,14 @@ def canonical_origin(row):
     enforced by the input pipelines as well.
     """
     source = row["conversation_id"]
+    original = source
     for prefix in ("position-v105:train:", "position-v105:development:",
                    "copy-v103:train:", "copy-v103:development:"):
         if source.startswith(prefix):
             source = source[len(prefix):]
-    return source
+    # Natural quotes carry the underlying nagato-v099 line identity.
+    # Synthetic IDs can recur across splits (e.g. synth-1); preserve split tag.
+    return source if source.startswith("nagato-v099:") else original
 
 
 def filter_rows(rows, task, tok, context_length):

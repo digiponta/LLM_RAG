@@ -17,6 +17,7 @@ import random
 import sys
 from collections import Counter
 from pathlib import Path
+from task_conditioning_v108 import tagged
 
 TASKS = ("nagato_knowledge", "nagato_persona", "real_persona", "evidence_binding")
 CHECKPOINTS = ("binding_v100", "copy_v103", "position_v105")
@@ -147,8 +148,24 @@ def score(args):
             collate_fn=lambda batch: collate_dialogue(batch, tok.pad_id))
         scores = {
             name: {"answer_nll": evaluate_answer_nll(model, loader, device)}
-            for name, model in models.items()
+            for name, model in models.items() if name != "multitask_v107"
+                or not getattr(args, "candidate_task_tag", False)
         }
+        if candidate_path is not None and getattr(args, "candidate_task_tag", False):
+            tagged_pairs = []
+            for row in accepted:
+                tagged_pair, reason = encode_dialogue(
+                    tagged(row, task), tok, context_limit, args.max_unk_fraction)
+                if tagged_pair is None:
+                    raise ValueError(f"Tagged candidate context invalid: {task}/{reason}")
+                tagged_pairs.append(tagged_pair)
+            tagged_loader = DataLoader(
+                tagged_pairs, batch_size=args.batch_size, shuffle=False,
+                collate_fn=lambda batch: collate_dialogue(batch, tok.pad_id))
+            scores["multitask_v107"] = {
+                "answer_nll": evaluate_answer_nll(
+                    models["multitask_v107"], tagged_loader, device)}
+
         generations = []
         for row in accepted[:args.generations]:
             prompt = tok.encode(compact_prompt(row), add_bos=True)
@@ -161,12 +178,15 @@ def score(args):
                 entry.update(question=row["question"], context=row.get("context", ""),
                              reference_answer=row["answer"])
             for name, model in models.items():
+                candidate_prompt = (tok.encode(compact_prompt(tagged(row, task)), add_bos=True)
+                                    if name == "multitask_v107" and getattr(args, "candidate_task_tag", False)
+                                    else prompt)
                 with torch.inference_mode():
                     raw = model.generate(
-                        prompt, max_new_tokens=args.max_new_tokens,
+                        candidate_prompt, max_new_tokens=args.max_new_tokens,
                         eos_id=tok.eos_id, temperature=0, top_k=None,
                         repetition_penalty=1.0)
-                tail = raw[len(prompt):]
+                tail = raw[len(candidate_prompt):]
                 generated = tok.decode(tail, skip_special_tokens=True)
                 entry[name] = {
                     "exact_match": generated == row["answer"],
@@ -196,6 +216,7 @@ def score(args):
         "checkpoints": {name: str(path) for name, path in checkpoints},
         "tasks": results,
         "text_included": bool(args.include_text),
+        "candidate_task_tag": bool(getattr(args, "candidate_task_tag", False)),
         "warnings": (
             "Each task's answer NLL is comparable ACROSS MODELS for the same task, "
             "not across differently formatted tasks. Exact generative matches are "
@@ -236,7 +257,9 @@ def main():
     p.add_argument("--output", type=Path, default=Path(
         "results/nagato_retention_v106.json"))
     p.add_argument("--candidate-checkpoint", type=Path, default=None,
-                   help="Optional v0.10.7 mixed SFT model to compare on same samples")
+                   help="Optional candidate checkpoint")
+    p.add_argument("--candidate-task-tag", action="store_true",
+                   help="Apply task markers only to candidate; baseline prompt unchanged")
     p.add_argument("--max-rows", type=int, default=200)
     p.add_argument("--generations", type=int, default=12)
     p.add_argument("--batch-size", type=int, default=16)

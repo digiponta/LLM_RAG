@@ -75,3 +75,7 @@ Use `python prepare_knowledge_binding_v100.py` to prepare attributed Nagato dire
 ## v0.10.1 Evidence Copy Diagnostics
 
 Before further training, compare two **frozen** unified RoPE Medium checkpoints on faithful 10/30/50-character copying from Nagato TEST source lines. `evaluate_evidence_copy_v101.py` reports exact match, first-token, prefix, position, similarity and EOS measurements without exposing source text by default. It does not train, retrieve evidence, or claim knowledge; see [EVIDENCE_COPY_DIAGNOSTICS_V101.md](EVIDENCE_COPY_DIAGNOSTICS_V101.md).
+
+## v0.10.2 Small Copy-Learning Probe
+
+`prepare_copy_learning_v102.py` prepares 16 source-line-disjoint 10-character TRAIN and 8 DEVELOPMENT copy tasks (Nagato final TEST stays sealed). `train_copy_learning_v102.py` continues from the v0.10.0 checkpoint for a controlled micro-overfit test, tracking train/development NLL and actual greedy exact copy independently; it saves a diagnostic checkpoint even if development regresses. See [COPY_LEARNING_PROBE_V102.md](COPY_LEARNING_PROBE_V102.md) for full Windows instructions. No existing model or private data is overwritten.

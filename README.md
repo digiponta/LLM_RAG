@@ -79,3 +79,7 @@ Before further training, compare two **frozen** unified RoPE Medium checkpoints 
 ## v0.10.2 Small Copy-Learning Probe
 
 `prepare_copy_learning_v102.py` prepares 16 source-line-disjoint 10-character TRAIN and 8 DEVELOPMENT copy tasks (Nagato final TEST stays sealed). `train_copy_learning_v102.py` continues from the v0.10.0 checkpoint for a controlled micro-overfit test, tracking train/development NLL and actual greedy exact copy independently; it saves a diagnostic checkpoint even if development regresses. See [COPY_LEARNING_PROBE_V102.md](COPY_LEARNING_PROBE_V102.md) for full Windows instructions. No existing model or private data is overwritten.
+
+## v0.10.3 Generalized Copy Learning
+
+`prepare_generalized_copy_v103.py` builds 2,000 mixed natural/synthetic 10-character copy TRAIN examples and 200 source-separated DEVELOPMENT examples from original Nagato TRAIN and VALIDATION only. `train_real_dialogue_v082.py` continues the existing RoPE Medium SFT model; `evaluate_generalized_copy_v103.py` measures exact copying, first-token accuracy, prefix and positional character accuracy independently for natural and synthetic unseen strings. Final Nagato TEST remains untouched. See [GENERALIZED_COPY_V103.md](GENERALIZED_COPY_V103.md) for exact Windows commands and evaluation boundaries.

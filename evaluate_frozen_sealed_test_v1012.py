@@ -14,7 +14,6 @@ import sys
 from collections import Counter
 from pathlib import Path
 
-from evaluate_nagato_retention_v106 import choose_rows
 from train_real_dialogue_v082 import (
     collate_dialogue, encode_dialogue, evaluate_answer_nll, load_dialogue_rows)
 from prepare_real_persona_v081 import compact_prompt
@@ -109,7 +108,7 @@ def preflight(args):
         "baseline_sha256": sha256_file(args.baseline),
         "requested_test_paths_not_opened": [
             str(args.nagato_test), str(args.binding_test),
-            *(str(args.persona_test),) if args.persona_test is not None else ()
+            *([str(args.persona_test)] if args.persona_test is not None else [])
         ],
         "note": "One-shot evaluation; no model or tokenizer is changed. "
                 "Real Persona TEST must be provided explicitly if available. "
@@ -163,12 +162,6 @@ def evaluate(args):
     }
     if persona is not None:
         audit["real_persona"] = audit_partition(trained, persona)
-    # Additional same-original partition guards on the supplied sealed input.
-    # Binding/Nagato may share an origin IN TEST, which is intentional.
-    if {origin(r) for r in nagato} != {origin(r) for r in binding}:
-        # They can differ if bound tokenizer filter excluded some original lines;
-        # the strict prohibition is only TRAIN/TEST overlap, not equal coverage.
-        pass
 
     models = {}
     for key, p in (("baseline_v100", args.baseline), ("candidate_v1011", args.checkpoint)):

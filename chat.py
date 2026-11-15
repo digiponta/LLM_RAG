@@ -1,4 +1,4 @@
-"""LLM_RAG v0.9.5 — local command-line chat for existing SFT checkpoints.
+"""LLM_RAG v0.10.12 — local CLI for frozen v0.10.11 unified checkpoint.
 
 Supports RoPE (v0.9.3+) and legacy Attention. Uses the exact original
 '前:...\\n問:...\\n答:' prompt and a sliding two-turn history. It is NOT a
@@ -13,6 +13,7 @@ import sys
 from pathlib import Path
 
 from prepare_real_persona_v081 import compact_prompt
+from evaluate_evidence_position_v104 import position_question
 from rag_persona import LocalRAG
 
 
@@ -67,6 +68,45 @@ def decode_answer(model, tokenizer, prompt: str, *, max_new_tokens: int = 48,
     tail = seq[len(prompt_ids):]
     return tokenizer.decode(tail, skip_special_tokens=True), bool(
         tail and tail[-1] == tokenizer.eos_id)
+
+
+
+CHAT_MODES = ("chat", "knowledge", "persona", "evidence")
+POSITION_LIMIT = 10
+
+
+def parse_position_command(value: str) -> tuple[int, str]:
+    """Parse /position N TEXT; only 10-char evidence matched the trained task."""
+    parts = value.split(maxsplit=2)
+    if len(parts) != 3 or parts[0] != "/position":
+        raise ValueError("Usage: /position N TEXT (exactly 10 characters)")
+    try:
+        pos = int(parts[1])
+    except ValueError as exc:
+        raise ValueError("Position must be 1, 5 or 10") from exc
+    if pos not in (1, 5, 10):
+        raise ValueError("Position must be 1, 5 or 10 (trained positions)")
+    evidence = parts[2]
+    if len(evidence) != POSITION_LIMIT:
+        raise ValueError("For the trained task, TEXT must contain exactly 10 characters")
+    return pos, evidence
+
+
+def position_prompt(position: int, evidence: str) -> str:
+    if position not in (1, 5, 10) or len(evidence) != POSITION_LIMIT:
+        raise ValueError("Position prompt accepts positions 1/5/10 and 10 characters")
+    return compact_prompt({
+        "question": position_question(position),
+        "context": "資料:" + evidence,
+    })
+
+
+def copy_prompt(evidence: str) -> str:
+    """Use the explicit generalized-copy task, without pretending exact success."""
+    if not evidence or len(evidence) != POSITION_LIMIT:
+        raise ValueError("Usage: /copy TEXT (exactly 10 characters)")
+    return compact_prompt({"question": "資料の文字列をそのまま答えてください。",
+                           "context": "資料:" + evidence})
 
 
 def resolve_rope(encoding: str, checkpoint_config: dict) -> bool:
@@ -127,15 +167,18 @@ def run(args) -> None:
     random.seed(args.seed)
     model, tok, device, rope = load_chat(args)
     print("=" * 64)
-    print(" LLM_RAG v0.9.7 — Local Chat")
+    print(" LLM_RAG v0.10.12 — Unified Local Chat")
     print("=" * 64)
     print(f"Model     : {args.checkpoint}")
     print(f"Attention : {'Multi-Head RoPE (' + str(model.num_heads) + ' heads)' if getattr(model, 'num_heads', 1) > 1 else ('RoPE' if rope else 'Legacy')}")
     print(f"Device    : {device}")
     print(f"Context   : {model.context_length}, Parameters: {model.parameter_count:,}")
-    print("Commands  : /reset  /status  /reload  /sources  /exit")
-    print("Note: local generative SFT demo, not an evidence-grounded retrieval answer.")
+    print("Commands  : /mode [chat|knowledge|persona|evidence]  /position N TEXT  /copy TEXT")
+    print("            /reset  /status  /reload  /sources  /exit")
+    print("Note: frozen v0.10.11 research checkpoint, not independently validated dialogue quality.")
+    print("      /position follows trained 10-character examples; /copy is not yet reliable.")
     history: list[str] = []
+    mode = "chat"
     rag = LocalRAG(args.docs) if args.rag else None
     sources: list[str] = []
     if rag:
@@ -158,7 +201,9 @@ def run(args) -> None:
             print("History cleared.")
             continue
         if question == "/status":
-            print(f"History turns={len(history)}, max=2; model_context={model.context_length}, RAG={bool(rag)}")
+            print(f"History turns={len(history)}, max=2; mode={mode}; "
+                  f"model_context={model.context_length}, RAG={bool(rag)}, "
+                  f"checkpoint={args.checkpoint}")
             continue
         if question == "/reload":
             if not rag:
@@ -170,26 +215,70 @@ def run(args) -> None:
         if question == "/sources":
             print("Sources: " + (", ".join(sources) if sources else "none"))
             continue
-        if question.startswith("/"):
-            print("Unknown command. Available: /reset /status /reload /sources /exit")
+        if question.startswith("/mode"):
+            pieces = question.split()
+            if len(pieces) == 1:
+                print(f"Mode: {mode}; choices: {', '.join(CHAT_MODES)}")
+            elif len(pieces) == 2 and pieces[1] in CHAT_MODES:
+                mode = pieces[1]
+                history.clear()
+                sources.clear()
+                print(f"Mode changed to {mode}; history cleared.")
+            else:
+                print("Usage: /mode chat|knowledge|persona|evidence")
             continue
+        if question.startswith("/") and not (
+                question.startswith("/position ") or question.startswith("/copy ")):
+            print("Unknown command. Use /mode /position /copy /reset /status /reload /sources /exit")
+            continue
+        special = question.startswith("/position ") or question.startswith("/copy ")
         try:
-            hits = rag.search(question, k=args.top_k_docs) if rag else []
-            sources = [hit.source for hit in hits]
-            # Short evidence, not trusted as a system instruction or fact.
-            snippets = [hit.text[:args.evidence_chars] for hit in hits]
-            prompt, _ = make_prompt(question, history, tok,
-                                    model.context_length, args.max_new_tokens,
-                                    evidence="／".join(snippets))
-            answer, eos = decode_answer(
-                model, tok, prompt, max_new_tokens=args.max_new_tokens,
-                temperature=args.temperature, top_k=args.top_k,
-                repetition_penalty=args.repetition_penalty)
+            if question.startswith("/position "):
+                pos, text = parse_position_command(question)
+                prompt = position_prompt(pos, text)
+                token_budget = min(4, args.max_new_tokens)
+                # Match frozen Position benchmark decoding: no repetition penalty.
+                answer, eos = decode_answer(
+                    model, tok, prompt, max_new_tokens=token_budget,
+                    temperature=0.0, repetition_penalty=1.0)
+                sources = []
+            elif question.startswith("/copy "):
+                evidence = question[len("/copy "):]
+                prompt = copy_prompt(evidence)
+                answer, eos = decode_answer(
+                    model, tok, prompt, max_new_tokens=min(32, args.max_new_tokens),
+                    temperature=0.0, repetition_penalty=1.0)
+                sources = []
+            else:
+                hits = rag.search(question, k=args.top_k_docs) if rag else []
+                sources = [hit.source for hit in hits]
+                snippets = [hit.text[:args.evidence_chars] for hit in hits]
+                effective_question = question
+                if mode == "knowledge":
+                    effective_question = "長門コーパスの記述に基づいて、出典を明示して答えてください。" + question
+                elif mode == "persona":
+                    effective_question = "長門として次の問いに答えてください。" + question
+                elif mode == "evidence":
+                    effective_question = "提示資料で確認できることだけを答えてください。" + question
+                prompt, _ = make_prompt(
+                    effective_question, history, tok,
+                    model.context_length, args.max_new_tokens,
+                    evidence="／".join(snippets))
+                answer, eos = decode_answer(
+                    model, tok, prompt, max_new_tokens=args.max_new_tokens,
+                    temperature=args.temperature, top_k=args.top_k,
+                    repetition_penalty=args.repetition_penalty)
         except ValueError as exc:
             print(f"Input rejected: {exc}")
             continue
         display = answer.strip() or "(生成できませんでした)"
         print(f"AI> {display}")
+        if question.startswith("/copy "):
+            print("[Experimental COPY: v0.10.11 DEVELOPMENT exact-copy=0/200. Do not treat as verified.]")
+        if question.startswith("/position "):
+            print("[Experimental POSITION: v0.10.11 DEVELOPMENT exact=58.67%, not guaranteed.]")
+        if mode == "evidence" and not special and not sources:
+            print("[No retrieved evidence; generated answer is unverified.]")
         if args.show_intent and hasattr(model, "intent_head"):
             import torch
             from intent_model_v097 import INTENTS
@@ -206,8 +295,9 @@ def run(args) -> None:
         if sources:
             print("RAG sources (unverified): " + ", ".join(sources))
         # Keep the real model output, not the display placeholder.
-        history.extend((question, answer))
-        history = history[-2:]
+        if not special:
+            history.extend((question, answer))
+            history = history[-2:]
         if args.verbose:
             print(f"[EOS={eos}, prompt_tokens={len(tok.encode(prompt, add_bos=True))}, history_turns={len(history)}]")
 
@@ -217,7 +307,7 @@ def main():
     p.add_argument("--gpu-dir", type=Path, default=Path("../LLM_GPU"))
     p.add_argument("--tokenizer", type=Path, default=Path("../LLM_GPU/model/tokenizer.json"))
     p.add_argument("--checkpoint", type=Path,
-                   default=Path("model/model-rag-rope-legacy-v0.9.3.pt"))
+                   default=Path("model/model-rag-position-rehearsal-v0.10.11.pt"))
     p.add_argument("--device", choices=("auto", "cpu", "cuda"), default="auto")
     p.add_argument("--encoding", choices=("auto", "legacy", "rope", "mha"), default="auto")
     p.add_argument("--max-new-tokens", type=int, default=48)

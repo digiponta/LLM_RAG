@@ -14,6 +14,7 @@ from pathlib import Path
 
 from prepare_real_persona_v081 import compact_prompt
 from evaluate_evidence_position_v104 import position_question
+from prepare_generalized_copy_v103 import QUESTION as COPY_QUESTION
 from rag_persona import LocalRAG
 
 
@@ -105,7 +106,7 @@ def copy_prompt(evidence: str) -> str:
     """Use the explicit generalized-copy task, without pretending exact success."""
     if not evidence or len(evidence) != POSITION_LIMIT:
         raise ValueError("Usage: /copy TEXT (exactly 10 characters)")
-    return compact_prompt({"question": "資料の文字列をそのまま答えてください。",
+    return compact_prompt({"question": COPY_QUESTION,
                            "context": "資料:" + evidence})
 
 

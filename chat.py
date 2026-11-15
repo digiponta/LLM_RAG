@@ -1,4 +1,4 @@
-"""LLM_RAG v0.10.12 — local CLI for frozen v0.10.11 unified checkpoint.
+"""LLM_RAG v0.10.13 — local CLI with Nagato named-entity direct evidence.
 
 Supports RoPE (v0.9.3+) and legacy Attention. Uses the exact original
 '前:...\\n問:...\\n答:' prompt and a sliding two-turn history. It is NOT a
@@ -16,6 +16,7 @@ from prepare_real_persona_v081 import compact_prompt
 from evaluate_evidence_position_v104 import position_question
 from prepare_generalized_copy_v103 import QUESTION as COPY_QUESTION
 from rag_persona import LocalRAG
+from nagato_direct_v1013 import NagatoDirect
 
 
 def make_prompt(question: str, history: list[str], tokenizer,
@@ -168,7 +169,7 @@ def run(args) -> None:
     random.seed(args.seed)
     model, tok, device, rope = load_chat(args)
     print("=" * 64)
-    print(" LLM_RAG v0.10.12 — Unified Local Chat")
+    print(" LLM_RAG v0.10.13 — Unified Local Chat")
     print("=" * 64)
     print(f"Model     : {args.checkpoint}")
     print(f"Attention : {'Multi-Head RoPE (' + str(model.num_heads) + ' heads)' if getattr(model, 'num_heads', 1) > 1 else ('RoPE' if rope else 'Legacy')}")
@@ -177,11 +178,19 @@ def run(args) -> None:
     print("Commands  : /mode [chat|knowledge|persona|evidence]  /position N TEXT  /copy TEXT")
     print("            /reset  /status  /reload  /sources  /exit")
     print("Note: frozen v0.10.11 research checkpoint, not independently validated dialogue quality.")
-    print("      /position follows trained 10-character examples; /copy is not yet reliable.")
+    print("      Proper-name hits in data-nagato.txt return one original sentence, bypassing LLM.")
+    print("      /position follows trained examples; /copy is not yet reliable.")
     history: list[str] = []
     mode = "chat"
     rag = LocalRAG(args.docs) if args.rag else None
+    direct = (NagatoDirect(args.nagato_source, entity_file=args.nagato_entities)
+              if args.nagato_direct else None)
     sources: list[str] = []
+    if direct:
+        print(f"Nagato    : direct={direct.available}, source={direct.source}, "
+              f"sentences={len(direct.entries)}, entities={len(direct.names)}")
+    else:
+        print("Nagato    : direct match off")
     if rag:
         print(f"RAG       : on, docs={args.docs}, passages={len(rag.passages)}")
     else:
@@ -204,14 +213,17 @@ def run(args) -> None:
         if question == "/status":
             print(f"History turns={len(history)}, max=2; mode={mode}; "
                   f"model_context={model.context_length}, RAG={bool(rag)}, "
-                  f"checkpoint={args.checkpoint}")
+                  f"checkpoint={args.checkpoint}, nagato_direct={bool(direct and direct.available)}")
             continue
         if question == "/reload":
-            if not rag:
-                print("RAG disabled. Restart with --rag.")
-            else:
+            if direct:
+                direct.refresh()
+                print(f"Nagato direct: {len(direct.entries)} sentences reloaded.")
+            if rag:
                 rag.refresh()
                 print(f"RAG: {len(rag.passages)} passages reloaded.")
+            if not direct and not rag:
+                print("No retrieval sources enabled.")
             continue
         if question == "/sources":
             print("Sources: " + (", ".join(sources) if sources else "none"))
@@ -233,6 +245,19 @@ def run(args) -> None:
             print("Unknown command. Use /mode /position /copy /reset /status /reload /sources /exit")
             continue
         special = question.startswith("/position ") or question.startswith("/copy ")
+        # Direct source-quotation path runs BEFORE RAG/LLM generation.
+        # The literal hit is a statement in the local corpus, not verified truth.
+        if not special and direct:
+            hit = direct.find(question)
+            if hit is not None:
+                sources = [hit.source]
+                print(f"AI> {hit.sentence}")
+                print(f"[Nagato direct quote: entity={hit.entity}, "
+                      f"source={hit.source}:{hit.line_number}; "
+                      "source statement, not independently verified; LLM bypassed]")
+                history.extend((question, hit.sentence))
+                history = history[-2:]
+                continue
         try:
             if question.startswith("/position "):
                 pos, text = parse_position_command(question)
@@ -316,6 +341,14 @@ def main():
     p.add_argument("--top-k", type=int, default=40)
     p.add_argument("--repetition-penalty", type=float, default=1.3)
     p.add_argument("--seed", type=int, default=42)
+    p.add_argument("--nagato-source", type=Path,
+                   default=Path("data/knowledge/data-nagato.txt"),
+                   help="Original Nagato corpus for literal one-sentence direct matches")
+    p.add_argument("--nagato-entities", type=Path, default=None,
+                   help="Optional local UTF-8 entity lexicon, one name per line")
+    p.add_argument("--no-nagato-direct", action="store_false", dest="nagato_direct",
+                   help="Disable original sentence priority; always use normal RAG/LLM")
+    p.set_defaults(nagato_direct=True)
     p.add_argument("--rag", action="store_true",
                    help="Optional local document retrieval; model was not trained for grounded citations")
     p.add_argument("--docs", type=Path, default=Path("data/knowledge"))

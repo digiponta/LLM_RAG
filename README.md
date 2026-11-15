@@ -111,3 +111,7 @@ v0.10.8 task markers alone preserved four-track Nagato/Persona/Chat/Evidence NLL
 ## v0.10.12 Frozen v0.10.11 and guarded sealed TEST
 
 The v0.10.11 Position-First plus low-LR rehearsal checkpoint passed the Development Retention Gate on four Nagato/Persona/Chat/Evidence NLL tasks and Position (58.67% exact). `evaluate_frozen_sealed_test_v1012.py` provides default no-Test-open preflight and an explicitly opt-in **once-only** frozen-v0.10.11 vs v0.10.0 evaluation on originally separated Nagato and Evidence TEST rows; a valid untampered Persona TEST can be supplied explicitly, but is never inferred. An origin/row/answer duplication audit precedes scoring. Results contain hashes and metrics, no raw private text, and never enable auto-deployment. Copy and Position remain DEVELOPMENT-only until a genuinely new source-independent evaluation is available. See [FROZEN_INDEPENDENT_EVAL_V1012.md](FROZEN_INDEPENDENT_EVAL_V1012.md).
+
+## chat.py v0.10.12 — Frozen Unified CLI
+
+`python chat.py` now defaults to the frozen `model/model-rag-position-rehearsal-v0.10.11.pt` checkpoint, preserves explicit `--checkpoint` for older models, and adds `/mode chat|knowledge|persona|evidence`, benchmark-matched `/position N TEXT` (N=1/5/10, exactly 10-character text), and experimental `/copy TEXT`. Position and Copy use model generation and do not add ephemeral extraction turns to the ordinary dialogue history; Copy was 0/200 exact in development and is labelled unreliable. See [CHAT_V1012.md](CHAT_V1012.md).

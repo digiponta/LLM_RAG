@@ -115,3 +115,7 @@ The v0.10.11 Position-First plus low-LR rehearsal checkpoint passed the Developm
 ## chat.py v0.10.12 — Frozen Unified CLI
 
 `python chat.py` now defaults to the frozen `model/model-rag-position-rehearsal-v0.10.11.pt` checkpoint, preserves explicit `--checkpoint` for older models, and adds `/mode chat|knowledge|persona|evidence`, benchmark-matched `/position N TEXT` (N=1/5/10, exactly 10-character text), and experimental `/copy TEXT`. Position and Copy use model generation and do not add ephemeral extraction turns to the ordinary dialogue history; Copy was 0/200 exact in development and is labelled unreliable. See [CHAT_V1012.md](CHAT_V1012.md).
+
+## v0.10.13 Proper-Name Direct Nagato Quotes
+
+`chat.py` now checks the original `data/knowledge/data-nagato.txt` for a conservative proper-name match BEFORE calling RAG or the LLM. On a hit it returns one unchanged sentence from the original source, with provenance and unverified-source notice; on a miss it follows ordinary chat/RAG. Works without `--rag`, refreshes via `/reload`, and can be disabled with `--no-nagato-direct`. Optional `--nagato-entities path.txt` permits local kanji name overrides. The heuristic is not full Japanese NER and the result is a deterministic unverified quotation, **not** model-generated factual proof. See [NAGATO_DIRECT_V1013.md](NAGATO_DIRECT_V1013.md).
